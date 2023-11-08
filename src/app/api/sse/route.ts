@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BehaviorSubject, interval } from 'rxjs';
+import { NextApiResponse } from 'next';
 
 export const runtime = 'nodejs';
 
@@ -7,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 const messageSubject = new BehaviorSubject<string>('');
 
-export async function GET() {
+export async function GET(req: NextRequest, res: NextApiResponse) {
   const encoder = new TextEncoder();
   const { writable, readable } = new TransformStream<Uint8Array, Uint8Array>();
   const writer = writable.getWriter();
@@ -29,9 +30,15 @@ export async function GET() {
       }
     },
     complete: () => {
-      interval$$.unsubscribe();
-      writer.close();
+      writable.close();
     },
+  });
+
+  res.socket?.on('close', () => {
+    interval$$.unsubscribe();
+    readable.cancel();
+    writable.close();
+    res.end();
   });
 
   return new NextResponse(readable, {
